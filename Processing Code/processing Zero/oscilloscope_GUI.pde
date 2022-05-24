@@ -1,5 +1,21 @@
 import processing.serial.*;
 
+void computeDft(int[] in, double[] outmag) {
+    int n = in.length;
+    for (int k = 0; k < n; k++) {  // For each output element
+      double sumreal = 0;
+      double sumimag = 0;
+      for (int t = 0; t < n; t++) {  // For each input element
+        double angle = 2 * Math.PI * t * k / n;
+        sumreal +=  (double)in[t]/1024.0 * Math.cos(angle) * Math.sin(angle);
+        sumimag += (double) -in[t]/1024.0 * Math.sin(angle) * Math.cos(angle);
+      }
+      outmag[k] = sumreal*sumreal+sumimag*sumimag;
+    }
+  }
+
+
+
 float sampleMax = 1024;  //10 bit resolution
 float voltageMax = 6.6; // 3.3v max 6.6 with a 1/2 voltage divider
 int sampleLen = 2048;  //1024/2048 samples buffer
@@ -8,11 +24,12 @@ float usSamp = 4;    //4uS/sample
 Serial port;  // Create object from Serial class
 int val;      // Data received from the serial port
 int[] values;
+double[] fftout;
 float zoom;
 float zoomVoltage;
-int c =0;
-PGraphics pg;
 
+PGraphics pg;
+PGraphics spectogram;
 
 int rising, falling;
 
@@ -20,12 +37,14 @@ int sDragX,sDragY, eDragX, eDragY;
 
 void setup() 
 {
-  size(1080, 720);
+  size(1080, 900);
   pg = createGraphics(1024, 512);
+  spectogram = createGraphics(1024, 256);
   // Open the port that the board is connected to and use the same speed (9600 bps)
-  port = new Serial(this, Serial.list()[1],115200);
+  port = new Serial(this, Serial.list()[0],115200);
   println(Serial.list());
   values = new int[sampleLen+1];
+  fftout = new double[sampleLen+1];
   zoom = 1.0f;
   zoomVoltage = 5.0f;
   smooth();
@@ -69,6 +88,14 @@ void drawLines() {
     x0 = x1;
     y0 = y1;
   }
+  spectogram.stroke(255,200,0);
+  spectogram.strokeWeight(1);
+  computeDft(values, fftout);
+  for (int i=1; i<spectogram.width; i++) {
+    spectogram.line(i,spectogram.height,i,(int)((1-fftout[i/4]/100)*spectogram.height));  
+  }
+  
+  
 }
 
 void drawGrid() {
@@ -106,7 +133,10 @@ void drawGrid() {
   vSampl = Math.round((sDragY-eDragY+0.0)/pg.height * zoomVoltage*100)/100.0;
   tSampl = Math.round((sDragX-eDragX+0.0)/pg.width * usSamp*pg.width/zoom*100)/100.0;
   pg.text(vSampl + "V / " + tSampl + "uS" , eDragX, eDragY);
-
+  int l = 250000/spectogram.width/4;
+  spectogram.stroke(255);
+  spectogram.strokeWeight(1);
+  spectogram.text(spectogram.width/2*l+ "Hz", spectogram.width/2, 10);
 }
 
 void mousePressed() {
@@ -187,10 +217,13 @@ void draw()
 {
   getValues();
   pg.beginDraw();
+  spectogram.beginDraw();
+  spectogram.background(0);
   pg.background(0);
   drawLines();
   drawGrid();
-
+  spectogram.endDraw();
   pg.endDraw();
-  image(pg, 0, 80); 
+  image(pg, 0, 80);
+  image(spectogram, 0, 600); 
 }
