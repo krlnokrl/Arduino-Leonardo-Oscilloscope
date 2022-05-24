@@ -1,31 +1,58 @@
 import processing.serial.*;
 
+void computeDft(int[] in, double[] outmag) {
+    int n = in.length;
+    for (int k = 0; k < n; k++) {  // For each output element
+      double sumreal = 0;
+      double sumimag = 0;
+      for (int t = 0; t < n; t++) {  // For each input element
+        double angle = 2 * Math.PI * t * k / n;
+        sumreal += in[t]/1024.0 * Math.cos(angle) * Math.sin(angle);
+        sumimag += -in[t]/1024.0 * Math.sin(angle) * Math.cos(angle);
+      }
+      outmag[k] = Math.sqrt(sumreal*sumreal+sumimag*sumimag);
+    }
+  }
+
+
+
+float sampleMax = 255;  //10 bit resolution
+float voltageMax = 6.6; // 3.3v max 6.6 with a 1/2 voltage divider
+int sampleLen = 2048;  //1024/2048 samples buffer
+float usSamp = 1.67;    //4uS/sample
 
 Serial port;  // Create object from Serial class
 int val;      // Data received from the serial port
 int[] values;
+double[] fftout;
 float zoom;
-int c =0;
-PGraphics pg;
+float zoomVoltage;
 
+PGraphics pg;
+PGraphics spectogram;
 
 int rising, falling;
 
+int sDragX,sDragY, eDragX, eDragY;
 
 void setup() 
 {
-  size(1080, 720);
-  pg = createGraphics(1030, 512);
-  // Open the port that the board is connected to and use the same speed (115200 bps)
-  port = new Serial(this, Serial.list()[0], 115200);
-  println(Serial.list()[0]);
-  values = new int[width];
+  size(1080, 900);
+  pg = createGraphics(1024, 512);
+  spectogram = createGraphics(1024, 256);
+  // Open the port that the board is connected to and use the same speed (9600 bps)
+  port = new Serial(this, Serial.list()[0],115200);
+  println(Serial.list());
+  values = new int[sampleLen+1];
+  fftout = new double[sampleLen+1];
   zoom = 1.0f;
+  zoomVoltage = 5.0f;
   smooth();
 }
 
 int getY(int val) {
-  return (int)(height - val / 255.0f * (height - 1));
+  float vh = (val/sampleMax) * (voltageMax/zoomVoltage);
+  return (int)(pg.height*(1-vh));
 }
 
 void getValues() {
@@ -35,15 +62,14 @@ void getValues() {
       String str = port.readStringUntil('\n');
       value = Integer.parseInt(str.trim());
       pushValue(value);
-      println(value);
     }catch(Exception e){} 
   }
 }
 
 void pushValue(int value) {
-  for (int i=0; i<width-1; i++)
+  for (int i=0; i<sampleLen-1; i++)
     values[i] = values[i+1];
-  values[width-1] = value;
+  values[sampleLen-1] = value;
 }
 
 void drawLines() {
@@ -62,6 +88,14 @@ void drawLines() {
     x0 = x1;
     y0 = y1;
   }
+  spectogram.stroke(255,200,0);
+  spectogram.strokeWeight(1);
+  computeDft(values, fftout);
+  for (int i=1; i<spectogram.width; i++) {
+    spectogram.line(i,spectogram.height,i,(int)((1-fftout[i/2]/20)*spectogram.height));  
+  }
+  
+  
 }
 
 void drawGrid() {
@@ -69,37 +103,83 @@ void drawGrid() {
   pg.stroke(255, 0, 0,100);
   for(int i=1;i<8; i++){
     pg.line(0, i*pg.height/8, pg.width, i*pg.height/8);
-    pg.text((8-i)*5.0/8 + "V", 0, i*pg.height/8);
+    pg.text((8-i)*zoomVoltage/8 + "V", 0, i*pg.height/8);
   }
   pg.stroke(0,255, 0,100);
   for(int i=1;i<8; i++){
     pg.line(i*pg.width/8, 0, i*pg.width/8, pg.height);
   }
-  pg.text((20.48/zoom)/8 + "ms/div", pg.width/8, 10);
+  pg.text((usSamp*pg.width/zoom)/8 + "uS/div", pg.width/8, 10);
+  
+  float vSampl = Math.round((1-(mouseY-80.0)/pg.height) * zoomVoltage*100)/100.0;
+  float tSampl = Math.round(((mouseX+0.0)/pg.width) * usSamp*pg.width/zoom*100)/100.0;
+  pg.text(vSampl + "V / " + tSampl + "uS" , 7*pg.width/8, 10); 
+  
+  pg.stroke(255, 200, 0);
 
   if(rising>0){
     pg.stroke(255, 200, 0);
-    pg.line(0, 512-(rising*2), pg.width, 512-(rising*2));
+    float lh = (rising/sampleMax) * (voltageMax/zoomVoltage);
+    pg.line(0, (1-lh)*pg.height, pg.width, (1-lh)*pg.height);
   }
   if(falling>0){
     pg.stroke(255, 0, 200);
-    pg.line(0, 512-(falling*2), pg.width, 512-(falling*2));
+    float lh = (falling/sampleMax) * (voltageMax/zoomVoltage);
+    pg.line(0, (1-lh)*pg.height, pg.width, (1-lh)*pg.height);
   }
+  pg.strokeWeight(1);
+  pg.stroke(0, 100, 255, 100);
+  pg.line(sDragX,0, sDragX, pg.height);
+  pg.line(0,sDragY, pg.width, sDragY);
+  pg.strokeWeight(3);
+  pg.point(sDragX,sDragY);
+  pg.strokeWeight(1);
+  pg.stroke(0, 200, 255, 100);
+  pg.line(eDragX,0, eDragX, pg.height);
+  pg.line(0,eDragY, pg.width, eDragY);
+  pg.strokeWeight(3);
+  pg.point(eDragX,eDragY);
+  pg.strokeWeight(1);
+  vSampl = Math.round((sDragY-eDragY+0.0)/pg.height * zoomVoltage*100)/100.0;
+  tSampl = Math.round((sDragX-eDragX+0.0)/pg.width * usSamp*pg.width/zoom*100)/100.0;
+  pg.text(vSampl + "V / " + tSampl + "uS" , eDragX, eDragY);
+  int l = (int)(1000000/ usSamp / spectogram.width/2);
+  spectogram.stroke(255);
+  spectogram.strokeWeight(1);
+  spectogram.text(spectogram.width/2*l+ "Hz", spectogram.width/2, 10);
+}
 
+void mousePressed() {
+  sDragX = mouseX; 
+  sDragY = mouseY-80; 
+}
+
+void mouseReleased() {
+  eDragX = mouseX; 
+  eDragY = mouseY-80; 
 }
 
 void keyReleased() {
   switch (key) {
     case '+':
-      zoom *= 1.5f;
-      println(zoom);
-      if ( (int) (width / zoom) <= 1 )
-        zoom /= 1.5f;
+      zoom += 0.5f;
+      if ( (int) (pg.width / zoom) <= 1 )
+        zoom -= -0.5f;
       break;
     case '-':
-      zoom /= 1.5f;
-      if (zoom < 1.0f)
-        zoom *= 1.5f;
+      zoom -= 0.5f;
+      if (zoom < 0.5f)
+        zoom = 0.5f;
+      break;
+    case '*':
+      zoomVoltage /= 1.2f;
+      if (zoomVoltage < 0.5f)
+        zoomVoltage = 0.5f;
+      break;
+    case '/':
+      zoomVoltage *= 1.2f;
+      if (zoomVoltage > 10.0f)
+        zoomVoltage = 10.0f;
       break;
     case 't':
       port.write("t0");
@@ -120,8 +200,8 @@ void keyReleased() {
       port.write("r0");
       break;
     }
-    int tresh_r = 255 -((mouseY-80)/2);
-    if(tresh_r>0 && tresh_r<255){
+    int tresh_r = (int)((1-(mouseY-80.0)/pg.height) * zoomVoltage/voltageMax * sampleMax);
+    if(tresh_r>0 && tresh_r<sampleMax){
       println(tresh_r);
       rising = tresh_r;
       port.write("r"+rising);
@@ -133,8 +213,8 @@ void keyReleased() {
       port.write("f0");
       break;
     }
-    int tresh_f = 255 -((mouseY-80)/2);
-    if(tresh_f>0 && tresh_f<255){
+    int tresh_f = (int)((1-(mouseY-80.0)/pg.height) * zoomVoltage/voltageMax * sampleMax);
+    if(tresh_f>0 && tresh_f<sampleMax){
       println(tresh_f);
       falling = tresh_f;
       port.write("f"+falling);
@@ -147,10 +227,13 @@ void draw()
 {
   getValues();
   pg.beginDraw();
+  spectogram.beginDraw();
+  spectogram.background(0);
   pg.background(0);
   drawLines();
   drawGrid();
-
+  spectogram.endDraw();
   pg.endDraw();
-  image(pg, 0, 80); 
+  image(pg, 0, 80);
+  image(spectogram, 0, 600); 
 }

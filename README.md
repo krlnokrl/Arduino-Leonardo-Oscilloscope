@@ -30,5 +30,5 @@ The arduino zero(SAMD21) improved code
 Samd21 measuring a 5v 976Hz PWM signal trough a 1/2 voltage divider  
 ![sample Full buffer](docs/scope.jpg)
 ![sample Zoomed](docs/scopeZ.jpg)
-FFT audio sine signal @ 10khz
-![sample FFT](docs/FFT.jpg)
+pwm 5V 50% @ 94kHz
+![sample FFT](docs/pwm94k.jpg)
