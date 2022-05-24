@@ -19,3 +19,14 @@ In the processing scope window press:
 20 μs/sample  
 1024 samples/trigger  
 ~8bit resolution  
+
+## Arduino zero code
+The arduino zero(SAMD21) improved code  
+4 μs/sample  
+2048 samples/trigger  
+~10bit resolution  
+
+## Demo
+Samd21 measuring a 5v 976Hz PWM signal trough a 1/2 voltage divider  
+![sample Full buffer](docs/scope.jpg)
+![sample Zoomed](docs/scopeZ.jpg)
