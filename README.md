@@ -14,7 +14,7 @@ In the processing scope window press:
 * F for setting falling edge threshold
 * C for continuous triggering on edge
 * S to stop continuous trigger
-* + - / * for zooming in/out on voltage/time axis
+* +-/* for zooming in/out on voltage/time axis
 
 ## Performance
 20 μs/sample  
