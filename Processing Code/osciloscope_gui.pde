@@ -2,7 +2,7 @@ import processing.serial.*;
 
 void computeDft(int[] in, double[] outmag) {
     int n = in.length;
-    for (int k = 0; k < n; k++) {  // For each output element
+    for (int k = 0; k < n/3; k++) {  // For each output element
       double sumreal = 0;
       double sumimag = 0;
       for (int t = 0; t < n; t++) {  // For each input element
@@ -15,11 +15,11 @@ void computeDft(int[] in, double[] outmag) {
   }
 
 
-
 float sampleMax = 255;  //10 bit resolution
 float voltageMax = 6.6; // 3.3v max 6.6 with a 1/2 voltage divider
 int sampleLen = 2048;  //1024/2048 samples buffer
-float usSamp = 1.67;    //4uS/sample
+float usSamp = 3.34;//1.67;    //4uS/sample
+int clockDiv = 1;
 
 Serial port;  // Create object from Serial class
 int val;      // Data received from the serial port
@@ -33,7 +33,7 @@ PGraphics spectogram;
 
 int rising, falling;
 
-int sDragX,sDragY, eDragX, eDragY;
+int sDragX,sDragY, eDragX, eDragY, specX;
 
 void setup() 
 {
@@ -41,7 +41,7 @@ void setup()
   pg = createGraphics(1024, 512);
   spectogram = createGraphics(1024, 256);
   // Open the port that the board is connected to and use the same speed (9600 bps)
-  port = new Serial(this, Serial.list()[0],115200);
+  port = new Serial(this, Serial.list()[1],250000);
   println(Serial.list());
   values = new int[sampleLen+1];
   fftout = new double[sampleLen+1];
@@ -56,12 +56,9 @@ int getY(int val) {
 }
 
 void getValues() {
-  int value = -1;
   while (port.available() > 0) {
     try{
-      String str = port.readStringUntil('\n');
-      value = Integer.parseInt(str.trim());
-      pushValue(value);
+        pushValue(port.read());
     }catch(Exception e){} 
   }
 }
@@ -146,12 +143,14 @@ void drawGrid() {
   int l = (int)(1000000/ usSamp / spectogram.width/2);
   spectogram.stroke(255);
   spectogram.strokeWeight(1);
-  spectogram.text(spectogram.width/2*l+ "Hz", spectogram.width/2, 10);
+  spectogram.text(specX*l+ "Hz", specX, 10);
+  spectogram.line(specX,0,specX, spectogram.height);
 }
 
 void mousePressed() {
   sDragX = mouseX; 
-  sDragY = mouseY-80; 
+  sDragY = mouseY-80;
+  specX = mouseX;
 }
 
 void mouseReleased() {
@@ -220,6 +219,11 @@ void keyReleased() {
       port.write("f"+falling);
     }
     break;
+    case 'b':
+      clockDiv = (clockDiv%3+1);
+      port.write("b"+clockDiv);
+      usSamp = 0.835 * pow(2,(3-clockDiv));
+    break;
   }
 }
 
@@ -235,5 +239,6 @@ void draw()
   spectogram.endDraw();
   pg.endDraw();
   image(pg, 0, 80);
-  image(spectogram, 0, 600); 
+  image(spectogram, 0, 600);
+
 }

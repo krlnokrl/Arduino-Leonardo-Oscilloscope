@@ -82,7 +82,7 @@ static void   ADCsync() {
 }
 
 
-void adc_init(){
+void adc_init(int resolution){
   analogRead(ADCPIN);  // do some pin init  pinPeripheral()
   ADC->CTRLA.bit.ENABLE = 0x00;             // Disable ADC
   ADCsync();
@@ -96,7 +96,14 @@ void adc_init(){
   ADC->AVGCTRL.reg = 0x00 ;       //no averaging
   ADC->SAMPCTRL.reg = 0x00;  ; //sample length in 1/2 CLK_ADC cycles
   ADCsync();
-  ADC->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV16 | ADC_CTRLB_FREERUN | ADC_CTRLB_RESSEL_8BIT;
+  if(resolution == 0)
+    ADC->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV32 | ADC_CTRLB_FREERUN | ADC_CTRLB_RESSEL_8BIT;
+  else if(resolution == 1)
+    ADC->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV16 | ADC_CTRLB_FREERUN | ADC_CTRLB_RESSEL_8BIT;
+  else if(resolution == 2)
+    ADC->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV8 | ADC_CTRLB_FREERUN | ADC_CTRLB_RESSEL_8BIT;
+  else
+    ADC->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV64 | ADC_CTRLB_FREERUN | ADC_CTRLB_RESSEL_8BIT;
   ADCsync();
   ADC->CTRLA.bit.ENABLE = 0x01;
   ADCsync();
@@ -113,18 +120,18 @@ bool trigger_r = false;
 bool trigger_f = false;
 
 
-uint8_t tresh = 0;
-
+uint8_t tresh_r = 0;
+uint8_t tresh_f = 0;
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(250000);
   analogReadResolution(8);
-  adc_init();
+  adc_init(0);
   dma_init();
 }
 
 void loop() {
-  c = (c+1)%40;
+  c = (c+1)%100;
   if (c==0 && Serial.available() > 0) {
     char cmd = Serial.read();
     int val = Serial.read();
@@ -143,21 +150,32 @@ void loop() {
     }
     if(cmd=='r'){
       trigger_r=!trigger_r;
-      tresh = val;
+      tresh_r = val;
     }
     if(cmd=='f'){
       trigger_f=!trigger_f;
-      tresh = val;
+      tresh_f = val;
+    }
+    if(cmd=='b'){
+      if(val == '1'){
+         adc_init(0);
+      }
+      if(val == '2'){
+         adc_init(1);
+      }
+      if(val == '3'){
+         adc_init(2);
+      }
     }
   }
   if(trigger_c || trigger_o){
     adc_dma(adcbuf,2);
     while(!dmadone);
-    if(trigger_r&&(adcbuf[1]>tresh)&&(adcbuf[0]<tresh)){
+    if(trigger_r&&(adcbuf[0]<=tresh_r)&&(adcbuf[1]>tresh_r)){
       trigger = true;
       trigger_o = false;
     }
-    if(trigger_f&&(adcbuf[1]<tresh)&&(adcbuf[0]>tresh)){
+    if(trigger_f&&(adcbuf[0]>=tresh_f)&&(adcbuf[1]<tresh_f)){
       trigger = true;
       trigger_o = false;
     }
@@ -167,10 +185,16 @@ void loop() {
   if(trigger){
     adc_dma(adcbuf,HWORDS);
     while(!dmadone);
-    for(int i=0; i< HWORDS; i++)
-      Serial.println(adcbuf[i]);
+    char s[32];
+    for(int i=0; i<HWORDS; i+=32){
+      for(int j=0; j<32; j++){
+        s[j]=adcbuf[i+j];
+      }
+
+      Serial.write(s, 32);
+      Serial.flush();
+    }
     trigger = false;
-   
   }
 
   
