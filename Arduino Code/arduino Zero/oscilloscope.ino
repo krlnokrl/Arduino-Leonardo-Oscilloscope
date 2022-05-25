@@ -67,6 +67,10 @@ void adc_dma(void *rxdata,  size_t hwords) {
     descriptor.btctrl =  DMAC_BTCTRL_BEATSIZE_HWORD | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_VALID;
     memcpy(&descriptor_section[chnl],&descriptor, sizeof(dmacdescriptor));
 
+    while (ADC->INTFLAG.bit.RESRDY == 0);  
+    uint16_t value = ADC->RESULT.reg;      
+    ADCsync();                             
+
     // start channel
     DMAC->CHID.reg = DMAC_CHID_ID(chnl);
     DMAC->CHCTRLA.reg |= DMAC_CHCTRLA_ENABLE;
