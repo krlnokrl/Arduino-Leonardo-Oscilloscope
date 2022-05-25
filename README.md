@@ -22,9 +22,9 @@ In the processing scope window press:
 
 ## Arduino zero code
 The arduino zero(SAMD21) improved code  
-4 μs/sample  
+1.67 μs/sample  
 2048 samples/trigger  
-~10bit resolution  
+~8/10bit resolution
 
 ## Demo
 Samd21 measuring a 5v 976Hz PWM signal trough a 1/2 voltage divider  
